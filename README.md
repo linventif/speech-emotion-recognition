@@ -40,3 +40,22 @@ Each of the 7356 RAVDESS files has a unique filename. The filename consists of a
 
 
 This is a group effort with my friends — Yit Tyn, Zhi Qin, and Jing Xuan.
+
+## Live demo
+
+This repository now includes a small local demo that can:
+
+- record audio from the browser microphone,
+- save the recorded file on disk,
+- run the existing CNN model on the saved file,
+- display the predicted emotion and confidence scores.
+
+### Run the demo
+
+```bash
+./.venv/bin/python demo_app.py
+```
+
+Then open `http://127.0.0.1:8000`.
+
+Saved recordings are written to `recordings/`.

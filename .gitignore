@@ -4,3 +4,6 @@ data
 .ipynb_checkpoints
 .venv
 .codex
+recordings
+.mplconfig
+__pycache__

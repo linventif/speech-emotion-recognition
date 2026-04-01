@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Speech Emotion Recorder Demo</title>
+    <style>
+      :root {
+        --bg: #f4efe6;
+        --panel: rgba(255, 252, 247, 0.88);
+        --text: #182126;
+        --muted: #5d666b;
+        --accent: #ca4d2f;
+        --accent-dark: #7d2917;
+        --line: rgba(24, 33, 38, 0.12);
+        --success: #1f7a52;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: Georgia, "Times New Roman", serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(202, 77, 47, 0.18), transparent 30%),
+          radial-gradient(circle at bottom right, rgba(31, 122, 82, 0.14), transparent 24%),
+          linear-gradient(135deg, #e9dccb 0%, var(--bg) 48%, #efe6dc 100%);
+      }
+
+      main {
+        width: min(960px, calc(100% - 32px));
+        margin: 32px auto;
+        padding: 28px;
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        background: var(--panel);
+        backdrop-filter: blur(18px);
+        box-shadow: 0 24px 80px rgba(49, 34, 24, 0.12);
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: clamp(2rem, 4vw, 3.6rem);
+        line-height: 0.95;
+        letter-spacing: -0.04em;
+      }
+
+      p,
+      li,
+      button,
+      input {
+        font-size: 1rem;
+      }
+
+      .intro {
+        max-width: 62ch;
+        margin: 0 0 24px;
+        color: var(--muted);
+      }
+
+      .grid {
+        display: grid;
+        gap: 18px;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        padding: 20px;
+        background: rgba(255, 255, 255, 0.58);
+      }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin: 18px 0;
+      }
+
+      button,
+      input[type="file"]::file-selector-button {
+        border: 0;
+        border-radius: 999px;
+        padding: 12px 18px;
+        color: #fff8f2;
+        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-dark) 100%);
+        cursor: pointer;
+        transition: transform 160ms ease, opacity 160ms ease;
+      }
+
+      button[disabled] {
+        cursor: not-allowed;
+        opacity: 0.5;
+      }
+
+      button:hover:not([disabled]),
+      input[type="file"]::file-selector-button:hover {
+        transform: translateY(-1px);
+      }
+
+      .ghost {
+        background: #ece1d1;
+        color: var(--text);
+      }
+
+      .status {
+        min-height: 1.4rem;
+        color: var(--muted);
+      }
+
+      .timer {
+        font-variant-numeric: tabular-nums;
+        font-size: 1.4rem;
+        margin: 10px 0 0;
+      }
+
+      .result {
+        display: none;
+      }
+
+      .result.is-visible {
+        display: block;
+      }
+
+      .emotion {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 14px;
+        padding: 10px 14px;
+        border-radius: 16px;
+        background: rgba(31, 122, 82, 0.1);
+        color: var(--success);
+        font-size: 1.3rem;
+      }
+
+      .details {
+        display: grid;
+        gap: 8px;
+        color: var(--muted);
+      }
+
+      .scores {
+        list-style: none;
+        padding: 0;
+        margin: 16px 0 0;
+      }
+
+      .scores li {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: 90px 1fr 58px;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+
+      .bar {
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(24, 33, 38, 0.08);
+        overflow: hidden;
+      }
+
+      .bar span {
+        display: block;
+        height: 100%;
+        background: linear-gradient(90deg, var(--accent), #e2934d);
+      }
+
+      audio {
+        width: 100%;
+        margin-top: 14px;
+      }
+
+      code {
+        padding: 2px 6px;
+        border-radius: 999px;
+        background: rgba(24, 33, 38, 0.06);
+      }
+
+      @media (max-width: 640px) {
+        main {
+          width: calc(100% - 20px);
+          margin: 10px auto;
+          padding: 18px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Recorder + analyse émotionnelle</h1>
+      <p class="intro">
+        Cette démo enregistre le micro, encode le signal en WAV dans le navigateur, l’envoie au serveur Python,
+        sauvegarde le fichier sur disque puis retourne la prédiction du modèle CNN.
+      </p>
+
+      <div class="grid">
+        <section class="card">
+          <strong>Démo live</strong>
+          <div class="controls">
+            <button id="startButton">Démarrer</button>
+            <button id="stopButton" class="ghost" disabled>Arrêter et analyser</button>
+          </div>
+          <p id="status" class="status">Prêt.</p>
+          <p id="timer" class="timer">00:00</p>
+          <audio id="playback" controls></audio>
+        </section>
+
+        <section class="card">
+          <strong>Fallback fichier</strong>
+          <p class="intro">
+            Si le navigateur bloque le micro, vous pouvez aussi envoyer un fichier audio <code>.wav</code>.
+          </p>
+          <input id="fileInput" type="file" accept="audio/wav" />
+        </section>
+      </div>
+
+      <section id="resultCard" class="card result">
+        <p class="emotion">
+          <span>Émotion détectée</span>
+          <strong id="labelValue"></strong>
+        </p>
+        <div class="details">
+          <span>Confiance: <strong id="confidenceValue"></strong></span>
+          <span>Durée: <strong id="durationValue"></strong></span>
+          <span>Sample rate: <strong id="sampleRateValue"></strong></span>
+          <span>Fichier sauvegardé: <code id="savedFileValue"></code></span>
+        </div>
+        <strong>Scores par émotion</strong>
+        <ul id="scoresList" class="scores"></ul>
+      </section>
+    </main>
+
+    <script>
+      const startButton = document.getElementById("startButton");
+      const stopButton = document.getElementById("stopButton");
+      const fileInput = document.getElementById("fileInput");
+      const statusNode = document.getElementById("status");
+      const timerNode = document.getElementById("timer");
+      const playback = document.getElementById("playback");
+      const resultCard = document.getElementById("resultCard");
+      const labelValue = document.getElementById("labelValue");
+      const confidenceValue = document.getElementById("confidenceValue");
+      const durationValue = document.getElementById("durationValue");
+      const sampleRateValue = document.getElementById("sampleRateValue");
+      const savedFileValue = document.getElementById("savedFileValue");
+      const scoresList = document.getElementById("scoresList");
+
+      const emotionTranslations = {
+        angry: "colère",
+        calm: "calme",
+        disgust: "dégoût",
+        fearful: "peur",
+        happy: "joie",
+        neutral: "neutre",
+        sad: "tristesse",
+        surprised: "surprise",
+      };
+
+      let audioContext;
+      let inputNode;
+      let processorNode;
+      let stream;
+      let timerId;
+      let startedAt = 0;
+      let chunks = [];
+      let sampleRate = 44100;
+
+      function setStatus(message) {
+        statusNode.textContent = message;
+      }
+
+      function updateTimer() {
+        const elapsedMs = Date.now() - startedAt;
+        const totalSeconds = Math.floor(elapsedMs / 1000);
+        const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
+        const seconds = String(totalSeconds % 60).padStart(2, "0");
+        timerNode.textContent = `${minutes}:${seconds}`;
+      }
+
+      function mergeChunks(parts) {
+        const totalLength = parts.reduce((sum, part) => sum + part.length, 0);
+        const merged = new Float32Array(totalLength);
+        let offset = 0;
+        for (const part of parts) {
+          merged.set(part, offset);
+          offset += part.length;
+        }
+        return merged;
+      }
+
+      function encodeWav(samples, wavSampleRate) {
+        const pcm = mergeChunks(samples);
+        const buffer = new ArrayBuffer(44 + pcm.length * 2);
+        const view = new DataView(buffer);
+
+        function writeText(offset, text) {
+          for (let i = 0; i < text.length; i += 1) {
+            view.setUint8(offset + i, text.charCodeAt(i));
+          }
+        }
+
+        writeText(0, "RIFF");
+        view.setUint32(4, 36 + pcm.length * 2, true);
+        writeText(8, "WAVE");
+        writeText(12, "fmt ");
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, 1, true);
+        view.setUint32(24, wavSampleRate, true);
+        view.setUint32(28, wavSampleRate * 2, true);
+        view.setUint16(32, 2, true);
+        view.setUint16(34, 16, true);
+        writeText(36, "data");
+        view.setUint32(40, pcm.length * 2, true);
+
+        let offset = 44;
+        for (let i = 0; i < pcm.length; i += 1) {
+          const value = Math.max(-1, Math.min(1, pcm[i]));
+          view.setInt16(offset, value < 0 ? value * 0x8000 : value * 0x7fff, true);
+          offset += 2;
+        }
+
+        return new Blob([buffer], { type: "audio/wav" });
+      }
+
+      async function uploadAudio(blob, fileName) {
+        const formData = new FormData();
+        formData.append("audio", blob, fileName);
+
+        setStatus("Analyse en cours...");
+        const response = await fetch("/api/analyze", { method: "POST", body: formData });
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload.error || "Échec de l'analyse.");
+        }
+
+        renderResult(payload);
+        setStatus("Analyse terminée.");
+      }
+
+      function formatEmotionLabel(label) {
+        const translation = emotionTranslations[label];
+        return translation ? `${label} (${translation})` : label;
+      }
+
+      function renderResult(result) {
+        resultCard.classList.add("is-visible");
+        labelValue.textContent = formatEmotionLabel(result.label);
+        confidenceValue.textContent = `${Math.round(result.confidence * 100)} %`;
+        durationValue.textContent = `${result.duration_seconds} s`;
+        sampleRateValue.textContent = `${result.sample_rate} Hz`;
+        savedFileValue.textContent = result.saved_file;
+
+        scoresList.innerHTML = "";
+        result.scores.forEach((score) => {
+          const item = document.createElement("li");
+          item.innerHTML = `
+            <span>${formatEmotionLabel(score.label)}</span>
+            <div class="bar"><span style="width:${Math.max(score.score * 100, 1)}%"></span></div>
+            <strong>${(score.score * 100).toFixed(1)}%</strong>
+          `;
+          scoresList.appendChild(item);
+        });
+      }
+
+      async function startRecording() {
+        chunks = [];
+        resultCard.classList.remove("is-visible");
+
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        sampleRate = audioContext.sampleRate;
+
+        const sink = audioContext.createGain();
+        sink.gain.value = 0;
+
+        inputNode = audioContext.createMediaStreamSource(stream);
+        processorNode = audioContext.createScriptProcessor(4096, 1, 1);
+        processorNode.onaudioprocess = (event) => {
+          const channel = event.inputBuffer.getChannelData(0);
+          chunks.push(new Float32Array(channel));
+        };
+
+        inputNode.connect(processorNode);
+        processorNode.connect(sink);
+        sink.connect(audioContext.destination);
+
+        startedAt = Date.now();
+        timerId = window.setInterval(updateTimer, 250);
+        updateTimer();
+        startButton.disabled = true;
+        stopButton.disabled = false;
+        setStatus("Enregistrement en cours...");
+      }
+
+      async function stopRecording() {
+        stopButton.disabled = true;
+        window.clearInterval(timerId);
+
+        processorNode.disconnect();
+        inputNode.disconnect();
+        audioContext.close();
+        stream.getTracks().forEach((track) => track.stop());
+
+        const wavBlob = encodeWav(chunks, sampleRate);
+        playback.src = URL.createObjectURL(wavBlob);
+        startButton.disabled = false;
+
+        await uploadAudio(wavBlob, `recording-${Date.now()}.wav`);
+      }
+
+      startButton.addEventListener("click", async () => {
+        try {
+          await startRecording();
+        } catch (error) {
+          setStatus(error.message || "Impossible d'accéder au micro.");
+        }
+      });
+
+      stopButton.addEventListener("click", async () => {
+        try {
+          await stopRecording();
+        } catch (error) {
+          setStatus(error.message || "Erreur pendant l'analyse.");
+          startButton.disabled = false;
+        }
+      });
+
+      fileInput.addEventListener("change", async (event) => {
+        const [file] = event.target.files || [];
+        if (!file) {
+          return;
+        }
+
+        playback.src = URL.createObjectURL(file);
+        resultCard.classList.remove("is-visible");
+
+        try {
+          await uploadAudio(file, file.name);
+        } catch (error) {
+          setStatus(error.message || "Erreur pendant l'analyse.");
+        } finally {
+          fileInput.value = "";
+        }
+      });
+    </script>
+  </body>
+</html>
